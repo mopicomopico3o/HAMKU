@@ -1504,7 +1504,7 @@ function workingOn(date){return allSongs().filter(function(r){return !!periodOn(
 
 /* ---------- persistence ---------- */
 var ref=null,dirty=false,saving=false,remoteReady=false,lastJson='',timer=null,busy=0;
-function setSync(s){ui.syncS=s;var el=document.getElementById('sync');if(!el)return;var map={local:'이 기기에만 저장 중',wait:'동기화 연결 중',ok:'동기화됨',saving:'저장 중',err:'저장 실패, 다시 시도 중',img:'사진 압축 중',out:'로그인하면 기기끼리 이어져요',deny:'이 계정은 쓸 수 없어요'};el.dataset.s=s;el.textContent=busy?map.img:(map[s]||'');}
+function setSync(s){ui.syncS=s;var el=document.getElementById('sync');if(!el)return;var map={local:'이 기기에만 저장 중',wait:'동기화 연결 중',ok:'동기화됨',saving:'저장 중',err:'저장 실패, 다시 시도 중',img:'사진 압축 중',big:'글이 너무 길어 저장하지 못했어요',out:'로그인하면 기기끼리 이어져요',deny:'이 계정은 쓸 수 없어요'};el.dataset.s=s;el.textContent=busy?map.img:(map[s]||'');}
 function saveLocal(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}
 function loadObj(o){
   if(!o||typeof o!=='object')return;
@@ -1527,6 +1527,7 @@ function hasData(){return S.projects.length>0||S.todos.length>0;}
 function schedule(){if(!ref||!remoteReady)return;clearTimeout(timer);timer=setTimeout(flush,900);}
 function flush(){
   if(!ref||!remoteReady||saving)return;
+  if(fb){flushParts();return;}
   var json=JSON.stringify(S);
   if(json===lastJson){dirty=false;setSync('ok');return;}
   saving=true;setSync('saving');
@@ -1554,20 +1555,79 @@ function onRemote(snap){
   if(first){pushQueued();hydrate();}
   if(dirty)schedule();
 }
-/* outside Claude (the GitHub Pages build): her own Firebase project, signed in with Google. Same document shape as the Claude store. */
-var fb=null;
+/* outside Claude (the GitHub Pages build): her own Firebase project, signed in with Google.
+   A Firestore document cannot pass 1 MiB, so the state is stored in parts: the main document holds the decorations and the
+   project order, each project has its own document, and to-dos are grouped by month. Only parts that changed are written. */
+var fb=null,lastParts={},rMain,rParts=null;
+function partsOf(st){
+  var out={},dc=st.deco||{};
+  out.meta=JSON.stringify({deco:dc,order:st.projects.map(function(p){return p.id;})});
+  st.projects.forEach(function(p){out['p_'+p.id]=JSON.stringify(p);});
+  var by={};st.todos.forEach(function(t){var k=/^\d{4}-\d{2}/.test(t.date||'')?t.date.slice(0,7):'none';(by[k]=by[k]||[]).push(t);});
+  Object.keys(by).forEach(function(k){out['t_'+k]=JSON.stringify(by[k]);});
+  return out;
+}
+function fromParts(pt){
+  var meta={};try{meta=JSON.parse(pt.meta||'{}')||{};}catch(e){}
+  var ps={},todos=[];
+  Object.keys(pt).sort().forEach(function(k){try{if(k.indexOf('p_')===0){var p=JSON.parse(pt[k]);if(p&&p.id)ps[p.id]=p;}else if(k.indexOf('t_')===0){var a=JSON.parse(pt[k]);if(Array.isArray(a))todos=todos.concat(a);}}catch(e){}});
+  var order=Array.isArray(meta.order)?meta.order:[],projects=[];
+  order.forEach(function(id){if(ps[id]){projects.push(ps[id]);delete ps[id];}});
+  Object.keys(ps).forEach(function(id){projects.push(ps[id]);});
+  return {projects:projects,todos:todos,deco:meta.deco||{}};
+}
+function sameParts(a,b){var ka=Object.keys(a),kb=Object.keys(b);if(ka.length!==kb.length)return false;for(var i=0;i<ka.length;i++){if(a[ka[i]]!==b[ka[i]])return false;}return true;}
+function flushParts(){
+  var cur=partsOf(S),ops=[];
+  Object.keys(cur).forEach(function(k){if(cur[k]!==lastParts[k])ops.push([k,cur[k]]);});
+  Object.keys(lastParts).forEach(function(k){if(!(k in cur))ops.push([k,null]);});
+  if(!ops.length){dirty=false;setSync('ok');return;}
+  var big=ops.filter(function(o){return o[1]&&o[1].length>900000;})[0];
+  if(big){setSync('big');return;}
+  saving=true;setSync('saving');
+  var chain=Promise.resolve(),now=Date.now(),r=ref,db=fb.db;
+  for(var i=0;i<ops.length;i+=400){(function(sl){chain=chain.then(function(){var b=db.batch();sl.forEach(function(o){
+    if(o[0]==='meta')b.set(r,{v:2,meta:o[1],at:now});
+    else if(o[1]==null)b.delete(r.collection('part').doc(o[0]));
+    else b.set(r.collection('part').doc(o[0]),{json:o[1],at:now});});return b.commit();});})(ops.slice(i,i+400));}
+  chain.then(function(){if(ref!==r){saving=false;return;}lastParts=cur;saving=false;dirty=!sameParts(partsOf(S),cur);setSync('ok');if(dirty)schedule();},function(){saving=false;if(ref!==r)return;setSync('err');clearTimeout(timer);timer=setTimeout(flush,5000);});
+}
+function onFbRemote(){
+  if(rMain===undefined||rParts===null)return; /* wait for both listeners */
+  var first=!remoteReady;remoteReady=true;
+  var remote=null;
+  if(rMain&&typeof rMain.meta==='string'){remote={meta:rMain.meta};Object.keys(rParts).forEach(function(k){remote[k]=rParts[k];});}
+  else if(rMain&&typeof rMain.json==='string'){ /* written by the first version: one document. Read it, then save it back in parts. */
+    if(first||(!dirty&&!saving)){try{loadObj(JSON.parse(rMain.json));lastParts={};dirty=true;saveLocal();draw();}catch(e){}}
+    setSync('ok');if(first){pushQueued();hydrate();}schedule();return;
+  }
+  if(remote){
+    if(!sameParts(remote,lastParts)&&!saving&&(!dirty||first)&&!editing()){
+      loadObj(fromParts(remote));lastParts=remote;dirty=false;saveLocal();if(!(ui.modal&&ui.modal.type==='img'))draw();
+    }
+    setSync('ok');
+  }else{
+    setSync('ok');lastParts={};
+    if(first&&hasData()){dirty=true;schedule();}
+  }
+  if(first){pushQueued();hydrate();}
+  if(dirty)schedule();
+}
 function initFirebase(){
   try{firebase.initializeApp(window.FB_CONFIG);fb={auth:firebase.auth(),db:firebase.firestore(),user:null,ready:false,unsub:null};}catch(e){fb=null;setSync('local');return;}
   setSync('wait');
   fb.auth.onAuthStateChanged(function(u){
     fb.user=u||null;fb.ready=true;fb.denied=false;
     if(fb.unsub){try{fb.unsub();}catch(e){}fb.unsub=null;}
-    ref=null;remoteReady=false;lastJson='';
+    ref=null;remoteReady=false;lastJson='';lastParts={};rMain=undefined;rParts=null;
     if(!u){setSync('out');draw();return;}
     try{var was=localStorage.getItem(LS+'-uid');if(was&&was!==u.uid){S={projects:[],todos:[],deco:{imgs:{}}};IMG={};saveLocal();setQueue([]);}localStorage.setItem(LS+'-uid',u.uid);}catch(e){}
     setSync('wait');
     ref=fb.db.doc('users/'+u.uid+'/led/state');
-    fb.unsub=ref.onSnapshot(onRemote,function(er){ref=null;remoteReady=false;fb.denied=!!(er&&er.code==='permission-denied');setSync(fb.denied?'deny':'err');draw();});
+    var fail=function(er){if(!ref)return;try{if(fb.unsub)fb.unsub();}catch(e){}ref=null;remoteReady=false;fb.denied=!!(er&&er.code==='permission-denied');setSync(fb.denied?'deny':'err');draw();};
+    var r0=ref,u1=r0.onSnapshot(function(sn){if(sn.metadata&&sn.metadata.hasPendingWrites)return;rMain=sn.exists?sn.data():null;onFbRemote();},fail);
+    var u2=r0.collection('part').onSnapshot(function(q){if(q.metadata&&q.metadata.hasPendingWrites)return;var m={};q.forEach(function(d){var v=d.data();if(v&&typeof v.json==='string')m[d.id]=v.json;});rParts=m;onFbRemote();},fail);
+    fb.unsub=function(){try{u1();}catch(e){}try{u2();}catch(e){}};
     draw();
   });
 }
@@ -1593,19 +1653,32 @@ function idb(){if(idbP)return idbP;idbP=new Promise(function(res){try{var rq=ind
 function idbDo(mode,fn){return idb().then(function(db){if(!db)return null;return new Promise(function(res){try{var tx=db.transaction('i',mode),rq=fn(tx.objectStore('i'));rq.onsuccess=function(){res(rq.result);};rq.onerror=function(){res(null);};}catch(e){res(null);}});});}
 function queue(){try{return JSON.parse(localStorage.getItem(LSP)||'[]');}catch(e){return [];}}
 function setQueue(q){try{localStorage.setItem(LSP,JSON.stringify(q));}catch(e){}}
+function imgDoc(url){
+  var m=/^data:(image\/[a-z0-9.+-]+);base64,(.*)$/i.exec(url||'');
+  if(fb&&m&&firebase.firestore.Blob){try{return {m:m[1],b:firebase.firestore.Blob.fromBase64String(m[2]),at:Date.now()};}catch(e){}}
+  return {d:url,at:Date.now()};
+}
+function imgUrl(d){
+  if(!d)return null;
+  if(typeof d.d==='string'&&d.d.indexOf('data:image/')===0)return d.d;
+  if(d.b&&typeof d.b.toBase64==='function'&&/^image\//.test(d.m||''))return 'data:'+d.m+';base64,'+d.b.toBase64();
+  return null;
+}
+function imgBytes(url){var i=(url||'').indexOf(',');return fb?Math.round(((url||'').length-i-1)*.75)+120:(url||'').length+120;}
+function useAdd(n,c){var dc=S.deco;if(!dc.use||typeof dc.use!=='object')return;dc.use.b=Math.max(0,(+dc.use.b||0)+n);dc.use.n=Math.max(0,(+dc.use.n||0)+c);}
 function remotePut(id,url){if(!ref||!remoteReady){var q=queue();if(q.indexOf(id)<0){q.push(id);setQueue(q);}return;}
-  ref.collection('img').doc(id).set({d:url,at:Date.now()}).then(function(){setQueue(queue().filter(function(x){return x!==id;}));},function(){var q=queue();if(q.indexOf(id)<0){q.push(id);setQueue(q);}});}
+  ref.collection('img').doc(id).set(imgDoc(url)).then(function(){setQueue(queue().filter(function(x){return x!==id;}));},function(){var q=queue();if(q.indexOf(id)<0){q.push(id);setQueue(q);}});}
 function pushQueued(){queue().forEach(function(id){getImg(id,true).then(function(u){if(u)remotePut(id,u);else setQueue(queue().filter(function(x){return x!==id;}));});});}
-function putImg(id,url){IMG[id]=url;idbDo('readwrite',function(st){return st.put(url,id);});remotePut(id,url);}
+function putImg(id,url){if(!IMG[id])useAdd(imgBytes(url),1);IMG[id]=url;idbDo('readwrite',function(st){return st.put(url,id);});remotePut(id,url);}
 function getImg(id,localOnly){
   if(IMG[id])return Promise.resolve(IMG[id]);
   return idbDo('readonly',function(st){return st.get(id);}).then(function(v){
     if(v){IMG[id]=v;return v;}
     if(localOnly||!ref||!remoteReady)return null;
-    return ref.collection('img').doc(id).get().then(function(sn){var d=sn.exists?sn.data():null;if(d&&typeof d.d==='string'&&d.d.indexOf('data:image/')===0){IMG[id]=d.d;idbDo('readwrite',function(st){return st.put(d.d,id);});return d.d;}return null;},function(){return null;});
+    return ref.collection('img').doc(id).get().then(function(sn){var u=imgUrl(sn.exists?sn.data():null);if(u){IMG[id]=u;idbDo('readwrite',function(st){return st.put(u,id);});return u;}return null;},function(){return null;});
   });
 }
-function delImg(id){if(!id)return;delete IMG[id];idbDo('readwrite',function(st){return st.delete(id);});setQueue(queue().filter(function(x){return x!==id;}));if(ref&&remoteReady){ref.collection('img').doc(id).delete().catch(function(){});}}
+function delImg(id){if(!id)return;if(IMG[id])useAdd(-imgBytes(IMG[id]),-1);else if(S.deco.use)getImgSize(id).then(function(n){if(n){useAdd(-n,-1);commit();}});delete IMG[id];idbDo('readwrite',function(st){return st.delete(id);});setQueue(queue().filter(function(x){return x!==id;}));if(ref&&remoteReady){ref.collection('img').doc(id).delete().catch(function(){});}}
 function shrink(src,w,h,alpha,mx){
   var max=mx||1600,q=.82,type='image/webp',url='';
   for(var k=0;k<14;k++){
@@ -1619,6 +1692,7 @@ function shrink(src,w,h,alpha,mx){
   }
   return url;
 }
+function getImgSize(id){return idbDo('readonly',function(st){return st.get(id);}).then(function(v){return v?imgBytes(v):0;});}
 function loadImage(src){return new Promise(function(res,rej){var im=new Image();im.onload=function(){res(im);};im.onerror=rej;im.src=src;});}
 function fileToUrl(file,alpha,mx){var u=URL.createObjectURL(file);return loadImage(u).then(function(im){var out=shrink(im,im.naturalWidth,im.naturalHeight,alpha,mx);URL.revokeObjectURL(u);return out;},function(){URL.revokeObjectURL(u);return null;});}
 function addImages(sid,files,target){
@@ -2673,7 +2747,11 @@ function saveFile(name,blob){
 var FB_CAP=1073741824;
 function fbUsage(){
   if(!fb||!fb.user||!ref)return;
-  ref.collection('img').get().then(function(q){var n=0,c=0;q.forEach(function(d){var v=d.data();n+=(v&&typeof v.d==='string'?v.d.length:0)+200;c++;});n+=JSON.stringify(S).length+400;ui.fbUse={bytes:n,imgs:c};if(ui.modal&&ui.modal.type==='backup'&&!ui.modal.pend)draw();},function(){});
+  var txt=0,pt=partsOf(S);Object.keys(pt).forEach(function(k){txt+=pt[k].length+300;});
+  var u=S.deco.use;
+  if(u&&typeof u==='object'){ui.fbUse={bytes:(+u.b||0)+txt,imgs:+u.n||0};return;}
+  /* first time: count what is already stored once, then keep a running total so opening this never downloads every photo again */
+  ref.collection('img').get().then(function(q){var n=0,c=0;q.forEach(function(d){var url=imgUrl(d.data());if(url){n+=imgBytes(url);c++;}});S.deco.use={b:n,n:c};commit();ui.fbUse={bytes:n+txt,imgs:c};if(ui.modal&&ui.modal.type==='backup'&&!ui.modal.pend)draw();},function(){});
 }
 A.login=function(){if(!fb)return;fb.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function(er){var c=er&&er.code||'';if(c==='auth/popup-closed-by-user'||c==='auth/cancelled-popup-request')return;toast(c==='auth/popup-blocked'?'로그인 창이 막혔어요. 팝업을 허용해 주세요':'로그인하지 못했어요. 잠시 뒤 다시 해 주세요');});};
 /* signing out takes her things off this browser too (they stay in her account), unless something has not been uploaded yet */
