@@ -1385,6 +1385,12 @@ body.stkmode .stk:hover:not(.sel){outline-color:var(--line2)}
 
 .cal .bar.due{container-type:inline-size}
 @container (max-width:150px){.bar.due span{display:none}}
+
+/* drop line under a row; sticker pictures always fit their slot whatever their shape */
+.row.overb{box-shadow:inset 0 -2px 0 var(--lc)}
+.shgrid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.stkb{min-width:0;min-height:0;overflow:visible}
+.stkb img{position:absolute;left:4px;top:4px;width:calc(100% - 8px);height:calc(100% - 8px);max-width:none;max-height:none;object-fit:contain}
 </style>
 </head>
 <body>
@@ -2285,11 +2291,20 @@ function commitText(){if(!ed||!ed.input)return;var i=ed.input,s=i.el.value.trim(
 function saveEditor(){if(!ed)return false;commitText();if(ed.base&&ed.ops.length){putImg(ed.id,shrink(ed.cv,ed.cv.width,ed.cv.height));ed.ops=[];return true;}return false;}
 
 /* ---------- actions ---------- */
-function reorder(dragKey,targetKey,slot){
+/* where a dragged to-do would land: above or below the row under the pointer (by its upper or lower half), or, in the empty part of a group, at its end when below the last row */
+function dropTarget(e){
+  var row=e.target.closest('.grp .row'),grp=e.target.closest('.grp');
+  if(row){var r=row.getBoundingClientRect();return {row:row,grp:grp,after:e.clientY>r.top+r.height/2};}
+  if(!grp)return null;
+  var rows=grp.querySelectorAll('.row'),last=rows[rows.length-1];
+  if(last&&e.clientY>last.getBoundingClientRect().bottom-2)return {row:last,grp:grp,after:true};
+  return {grp:grp};
+}
+function reorder(dragKey,targetKey,slot,after){
   var items=itemsFor(sel()),d=items.filter(function(i){return i.key===dragKey;})[0];
   if(!d)return;
   var rest=items.filter(function(i){return i.key!==dragKey;});
-  if(targetKey){var tg=rest.filter(function(i){return i.key===targetKey;})[0];if(!tg)return;d.slot=tg.slot;rest.splice(rest.indexOf(tg),0,d);}
+  if(targetKey){var tg=rest.filter(function(i){return i.key===targetKey;})[0];if(!tg)return;d.slot=tg.slot;rest.splice(rest.indexOf(tg)+(after?1:0),0,d);}
   else{d.slot=slot;var at=-1;rest.forEach(function(i,ix){if(at<0&&i.slot===slot)at=ix;});if(at<0)at=slot==='am'?0:rest.length;rest.splice(at,0,d);}
   rest.forEach(function(i,ix){setMeta(i.key,i.slot,ix);});
   touch();
@@ -2495,18 +2510,18 @@ document.addEventListener('paste',function(e){
   if(inEd){e.preventDefault();var tx=(e.clipboardData&&e.clipboardData.getData('text/plain'))||'';if(tx)document.execCommand('insertText',false,tx.replace(/\r/g,''));}
 });
 function isFiles(e){var t=e.dataTransfer&&e.dataTransfer.types;return !!t&&[].indexOf.call(t,'Files')>=0;}
-function clearOver(){[].forEach.call(document.querySelectorAll('.over'),function(n){n.classList.remove('over');});}
+function clearOver(){[].forEach.call(document.querySelectorAll('.over,.overb'),function(n){n.classList.remove('over','overb');});}
 function dropZone(e){var doc=document.getElementById('doc');if(!doc||ui.modal)return null;var l=e.target.closest&&e.target.closest('.lyr');return l||doc;}
 document.addEventListener('dragstart',function(e){var bg=e.target.closest&&e.target.closest('.bgrip');if(bg){ui.bdrag={sid:bg.dataset.sid,bid:bg.dataset.bid};e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain','block');var bl=bg.closest('.blk');if(bl)e.dataTransfer.setDragImage(bl,20,16);}catch(x){}return;}
   var g=e.target.closest&&e.target.closest('.grip');if(!g){if(e.target.tagName==='IMG')e.preventDefault();return;}ui.drag=g.dataset.key;e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',ui.drag);var row=g.closest('.row');if(row)e.dataTransfer.setDragImage(row,30,30);}catch(x){}});
 document.addEventListener('dragover',function(e){
   if(isFiles(e)){e.preventDefault();clearOver();var z=dropZone(e);if(z){z.classList.add('over');e.dataTransfer.dropEffect='copy';}else e.dataTransfer.dropEffect='none';return;}
   if(ui.bdrag){var tb_=e.target.closest('#doc .blk');[].forEach.call(document.querySelectorAll('.dropa,.dropb'),function(n){n.classList.remove('dropa','dropb');});if(tb_&&tb_.dataset.bid!==ui.bdrag.bid){e.preventDefault();var rc=tb_.getBoundingClientRect();tb_.classList.add(e.clientY>rc.top+rc.height/2?'dropa':'dropb');}return;}
-  if(!ui.drag)return;var row=e.target.closest('.grp .row'),grp=e.target.closest('.grp');if(!row&&!grp)return;e.preventDefault();clearOver();if(row&&row.dataset.key!==ui.drag)row.classList.add('over');else if(grp&&!row)grp.classList.add('over');});
+  if(!ui.drag)return;var dt=dropTarget(e);if(!dt)return;e.preventDefault();clearOver();if(dt.row){if(dt.row.dataset.key!==ui.drag)dt.row.classList.add(dt.after?'overb':'over');}else dt.grp.classList.add('over');});
 document.addEventListener('drop',function(e){
   if(isFiles(e)){e.preventDefault();clearOver();var z=dropZone(e);if(z){var sid=z.dataset.sid;if(z.classList.contains('lyr'))addImages(sid,e.dataTransfer.files,{kind:'lyrics'});else{var near=e.target.closest&&(e.target.closest('.blk')||e.target.closest('.im'));addImages(sid,e.dataTransfer.files,{kind:'body',after:near?near.dataset.bid:null});}}return;}
   if(ui.bdrag){var tg_=e.target.closest('#doc .blk'),bd=ui.bdrag;ui.bdrag=null;if(!tg_||tg_.dataset.bid===bd.bid)return;e.preventDefault();var rr=findSong(bd.sid);if(!rr)return;var mb=blk(rr.s,bd.bid),after=tg_.classList.contains('dropa');if(!mb)return;rr.s.body=rr.s.body.filter(function(x){return x!==mb;});var ti=-1;rr.s.body.forEach(function(x,i){if(x.id===tg_.dataset.bid)ti=i;});if(ti<0)rr.s.body.push(mb);else rr.s.body.splice(ti+(after?1:0),0,mb);touch(false);redoc(rr.s);return;}
-  if(!ui.drag)return;var row=e.target.closest('.grp .row'),grp=e.target.closest('.grp');if(!row&&!grp)return;e.preventDefault();var k=ui.drag;ui.drag=null;if(row){if(row.dataset.key!==k)reorder(k,row.dataset.key);else draw();}else reorder(k,null,grp.dataset.slot);});
+  if(!ui.drag)return;var dt=dropTarget(e);if(!dt)return;e.preventDefault();var k=ui.drag;ui.drag=null;if(dt.row){if(dt.row.dataset.key!==k)reorder(k,dt.row.dataset.key,null,dt.after);else draw();}else reorder(k,null,dt.grp.dataset.slot);});
 document.addEventListener('dragend',function(){ui.drag=null;ui.bdrag=null;clearOver();[].forEach.call(document.querySelectorAll('.dropa,.dropb'),function(n){n.classList.remove('dropa','dropb');});});
 document.addEventListener('dragleave',function(e){if(!e.relatedTarget)clearOver();});
 /* image resize handle + calendar range drag */
