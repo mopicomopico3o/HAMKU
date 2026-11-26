@@ -1365,6 +1365,26 @@ body.stkmode .stk:hover:not(.sel){outline-color:var(--line2)}
 .trayf{display:flex;justify-content:flex-end;gap:var(--g3);padding:var(--g2) var(--g5) 0}
 .trayf .tbtn{font-size:var(--f-xs)}
 .trayf .tbtn.warn{color:var(--warn);font-weight:700}
+
+/* calendar deadlines: what it is first (never cut), whose it is after (may be cut) */
+.bar.due b{flex-shrink:0;font-weight:700}
+.bar.due span{font-weight:400;opacity:.92}
+.bar.due span::before{content:'·';margin:0 4px 0 1px;opacity:.7}
+.lg.lgdue+.lg.lgdue{margin-left:0}
+#tip{position:fixed;z-index:90;left:0;top:0;max-width:min(320px,calc(100vw - 16px));padding:8px 12px;border-radius:var(--r-s);background:#4a3b35;color:#fff;font-size:var(--f-s);line-height:1.45;pointer-events:none;opacity:0;transform:translateY(3px);transition:opacity .12s var(--out),transform .12s var(--out);visibility:hidden}
+#tip.on{opacity:1;transform:none;visibility:visible}
+#tip::after{content:'';position:absolute;left:var(--ax,50%);top:100%;margin-left:-5px;border:5px solid transparent;border-top-color:#4a3b35}
+#tip.below::after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:#4a3b35}
+#tip.touch{pointer-events:auto;display:flex;flex-direction:column;gap:6px}
+#tip a{color:#ffe100;font-weight:700;text-decoration:underline}
+@media (prefers-reduced-motion:reduce){#tip{transition:none}}
+@media (max-width:720px){
+ .bar.due b{flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+ .bar.due span{display:none}
+}
+
+.cal .bar.due{container-type:inline-size}
+@container (max-width:150px){.bar.due span{display:none}}
 </style>
 </head>
 <body>
@@ -1727,7 +1747,7 @@ function svg(d,w,sw){return '<svg aria-hidden="true" width="'+(w||18)+'" height=
 var GRIP='<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.8"/><circle cx="15" cy="6" r="1.8"/><circle cx="9" cy="12" r="1.8"/><circle cx="15" cy="12" r="1.8"/><circle cx="9" cy="18" r="1.8"/><circle cx="15" cy="18" r="1.8"/></svg>';
 var GO=svg('<path d="M9 6l6 6-6 6"/>'),PREV=svg('<path d="M15 6l-6 6 6 6"/>'),PLUS=svg('<path d="M12 5v14M5 12h14"/>',18,2.2),PLUSS=svg('<path d="M12 5v14M5 12h14"/>',14,2.4);
 var BACK=svg('<path d="M19 12H5M11 6l-6 6 6 6"/>',16),LIST=svg('<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',16),IMGI=svg('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/>');
-var STAR='<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="3.2" stroke-linejoin="round"><path d="M12 5l2.1 4.5 4.9.6-3.6 3.4.9 4.9L12 16l-4.3 2.4.9-4.900L5 10.100l4.900-.6z"/></svg>',FLAG='<svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 5h11l-2.5 3.5L17 12H6z"/></svg>',CHEV=svg('<path d="M6 9l6 6 6-6"/>',16,2.4);
+var STAR='<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="3.2" stroke-linejoin="round"><path d="M12 5l2.1 4.5 4.9.6-3.6 3.4.9 4.9L12 16l-4.3 2.4.9-4.900L5 10.100l4.900-.6z"/></svg>',STARS='<svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"><path d="M12 4.500l2.300 4.800 5.200.7-3.800 3.600.9 5.200L12 16.300l-4.600 2.500.9-5.200-3.800-3.600 5.200-.7z"/></svg>',FLAG='<svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 5h11l-2.5 3.5L17 12H6z"/></svg>',CHEV=svg('<path d="M6 9l6 6 6-6"/>',16,2.4);
 var ARRUP=svg('<path d="M12 19V6M6 12l6-6 6 6"/>',14,2.6);
 var CHECK=svg('<path d="M20 6L9 17l-5-5"/>',14,3.2);
 function route(){var h=(location.hash||'#home').slice(1);if(h==='archive')return {v:'archive'};if(h==='cal')return {v:'cal'};if(h.indexOf('p-')===0){var p=proj(h.slice(2));if(p)return {v:'project',p:p};}if(h.indexOf('s-')===0){var r=findSong(h.slice(2));if(r)return {v:'song',r:r};}return {v:'home'};}
@@ -1875,7 +1895,7 @@ function calHtml(sd){
   var t=today(),m=ui.month||t.slice(0,7),y=+m.slice(0,4),mo=+m.slice(5,7),first=new Date(y,mo-1,1),days=new Date(y,mo,0).getDate();
   var ranges=[],free=[];
   allSongs().forEach(function(r){var pl=periods(r.s);pl.forEach(function(pp){ranges.push({a:pp.a,b:pp.b,label:songName(r),sid:r.s.id,done:isDone(r.s),st:chipStyle(r.s)});});if(!pl.length&&!isDone(r.s))free.push(r);});
-  S.projects.forEach(function(p){if(p.archived)return;DATE_KEYS.forEach(function(k){if(p[k[0]])ranges.push({a:p[k[0]],b:p[k[0]],label:p.name+' '+k[1],pid:p.id,due:true});});});
+  S.projects.forEach(function(p){if(p.archived)return;DATE_KEYS.forEach(function(k){if(p[k[0]])ranges.push({a:p[k[0]],b:p[k[0]],label:p.name+' '+k[1],kind:k[1],pname:p.name,show:k[0]==='show',pid:p.id,due:true});});});
   ranges.sort(function(x,z){return x.a<z.a?-1:(x.a>z.a?1:(x.due?-1:1));});
   var h='<section class="card cal" aria-label="작업 캘린더"><div class="hd"><h2>'+y+'년 '+mo+'월</h2><button class="btn sm sec" data-a="sched">'+PLUSS+'곡 일정</button><button class="tbtn" data-a="gotoday">오늘</button><button class="ibtn" data-a="month" data-d="-1" aria-label="이전 달">'+PREV+'</button><button class="ibtn" data-a="month" data-d="1" aria-label="다음 달">'+GO+'</button></div>'+
     '<div class="g7 w">'+WD.map(function(w){return '<div>'+w+'</div>';}).join('')+'</div>';
@@ -1893,13 +1913,13 @@ function calHtml(sd){
       var c1=r.a<ws.ds?ws.col:ws.col+diff(r.a,ws.ds),c2=r.b>we.ds?we.col:ws.col+diff(r.b,ws.ds),lane=0;
       while(lanes[lane]!==undefined&&lanes[lane]>=c1)lane++;
       lanes[lane]=c2;
-      if(r.due){bars+='<a class="bar due" href="#p-'+esc(r.pid)+'" style="grid-column:'+(c1+1)+' / '+(c2+2)+';grid-row:'+(lane+1)+'" title="'+esc(r.label+' · '+fmtShort(r.a))+'">'+FLAG+'<span>'+esc(r.label)+'</span></a>';return;}
+      if(r.due){var dn=diff(r.a,today()),dd=dn>0?'D-'+dn:(dn===0?'D-DAY':'지남'),tip=r.kind+' · '+r.pname+' · '+fmtShort(r.a)+' ('+dd+')';bars+='<a class="bar due'+(r.show?' show':'')+'" href="#p-'+esc(r.pid)+'" style="grid-column:'+(c1+1)+' / '+(c2+2)+';grid-row:'+(lane+1)+'" data-tip="'+esc(tip)+'" aria-label="'+esc(tip)+'">'+(r.show?STARS:FLAG)+'<b>'+esc(r.kind)+'</b><span>'+esc(r.pname.replace(/^\[([^\]]+)\]\s*/,'$1 '))+'</span></a>';return;}
       bars+='<a class="bar'+(r.a<ws.ds?' cont':'')+(r.b>we.ds?' more':'')+(r.done?' done':'')+'" href="#s-'+esc(r.sid)+'" style="grid-column:'+(c1+1)+' / '+(c2+2)+';grid-row:'+(lane+1)+(r.done?'':';'+r.st)+'" title="'+esc(r.label+' · '+fmtShort(r.a)+' ~ '+fmtShort(r.b))+'">'+esc(r.label)+'</a>';
     });
     h+='<div class="wk"><div class="g7">'+cells+'</div><div class="bars">'+bars+'</div></div>';
     d+=7;
   }
-  h+='<div class="calfoot"><div class="legend" aria-label="표시 설명"><span><i class="lg lgbar"></i>곡 작업 기간</span><span><i class="lg lgdue">'+FLAG+'</i>제출 · 마감 · 공연일</span><span><i class="lg lgtc">할 일 2</i>그날 남은 할 일</span><span class="lghint">날짜를 끌면 곡 일정을 넣을 수 있어요</span></div>'+
+  h+='<div class="calfoot"><div class="legend" aria-label="표시 설명"><span><i class="lg lgbar"></i>곡 작업 기간</span><span><i class="lg lgdue">'+FLAG+'</i>제출 · 마감</span><span><i class="lg lgdue">'+STARS+'</i>공연일</span><span><i class="lg lgtc">할 일 2</i>그날 남은 할 일</span><span class="lghint">날짜를 끌면 곡 일정을 넣을 수 있어요</span></div>'+
     (free.length?'<div class="unsched"><h3>일정 없는 곡 <span class="cnt">'+free.length+'</span></h3><div class="uchips">'+free.map(function(r){return '<button class="chipbtn" data-a="sched" data-sid="'+esc(r.s.id)+'" style="'+chipStyle(r.s)+'" title="눌러서 일정 넣기">'+esc(songName(r))+'</button>';}).join('')+'</div></div>':'')+'</div></section>';
   return h;
 }
@@ -2836,6 +2856,33 @@ A.bkapply=function(){
   if(!el){el=document.createElement('div');el.id='loginbar';var f=document.querySelector('.frame');f.insertBefore(el,f.firstChild);}
   el.innerHTML=fb.denied?'<span>이 계정은 쓸 수 없어요</span><button class="btn sm sec" data-a="logout">다른 계정</button>':'<span>로그인하면 컴퓨터와 이어져요</span><button class="btn sm" data-a="login">구글로 로그인</button>';
 };})();
+
+/* ---------- tip: what a calendar deadline is, shown at once on hover or focus; on touch the first tap shows it ---------- */
+var tipFor=null;
+function showTip(el,touch){
+  var t=document.getElementById('tip');if(!t){t=document.createElement('div');t.id='tip';t.setAttribute('role','tooltip');document.body.appendChild(t);}
+  t.textContent=el.dataset.tip;
+  if(touch&&el.getAttribute('href')){var a=document.createElement('a');a.href=el.getAttribute('href');a.textContent='프로젝트 열기';t.appendChild(a);}
+  t.className=touch?'on touch':'on';tipFor=el;
+  var b=el.getBoundingClientRect(),w=t.offsetWidth,h=t.offsetHeight,x=Math.max(8,Math.min(window.innerWidth-w-8,b.left+b.width/2-w/2)),y=b.top-h-8;
+  if(y<8){y=b.bottom+8;t.classList.add('below');}
+  t.style.left=Math.round(x)+'px';t.style.top=Math.round(y)+'px';
+  t.style.setProperty('--ax',Math.round(Math.max(12,Math.min(w-12,b.left+b.width/2-x)))+'px');
+}
+function hideTip(){var t=document.getElementById('tip');if(t)t.className='';tipFor=null;}
+var noHover=window.matchMedia&&window.matchMedia('(hover: none)').matches;
+document.addEventListener('mouseover',function(e){if(noHover)return;var el=e.target.closest&&e.target.closest('[data-tip]');if(el){if(el!==tipFor)showTip(el);}else if(tipFor)hideTip();});
+document.addEventListener('focusin',function(e){var el=e.target.closest&&e.target.closest('[data-tip]');if(el&&!noHover)showTip(el);});
+document.addEventListener('focusout',function(){if(!noHover)hideTip();});
+document.addEventListener('click',function(e){
+  if(!noHover){hideTip();return;}
+  if(e.target.closest('#tip'))return;
+  var el=e.target.closest&&e.target.closest('[data-tip]');
+  if(el&&el!==tipFor){e.preventDefault();e.stopPropagation();showTip(el,true);return;}
+  hideTip();
+},true);
+window.addEventListener('scroll',hideTip,true);window.addEventListener('hashchange',hideTip);window.addEventListener('resize',hideTip);
+(function(){var base=draw;draw=function(){base();if(tipFor&&!document.contains(tipFor))hideTip();};})();
 /* ---------- boot ---------- */
 try{var raw=localStorage.getItem(LS);if(raw)loadObj(JSON.parse(raw));}catch(e){}
 ui.sel=today();ui.month=today().slice(0,7);
