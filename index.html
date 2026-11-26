@@ -1361,6 +1361,10 @@ body.stkmode .stk:hover:not(.sel){outline-color:var(--line2)}
  #loginbar{display:flex;align-items:center;justify-content:space-between;gap:var(--g2);margin-bottom:var(--g3);padding:10px 14px;border:var(--ol);border-radius:var(--r-m);background:#fff;font-size:var(--f-s)}
  #loginbar .btn{flex-shrink:0}
 }
+
+.trayf{display:flex;justify-content:flex-end;gap:var(--g3);padding:var(--g2) var(--g5) 0}
+.trayf .tbtn{font-size:var(--f-xs)}
+.trayf .tbtn.warn{color:var(--warn);font-weight:700}
 </style>
 </head>
 <body>
@@ -1686,9 +1690,11 @@ function shrink(src,w,h,alpha,mx){
     c.width=Math.max(1,Math.round(w*sc));c.height=Math.max(1,Math.round(h*sc));
     var g=c.getContext('2d');if(!alpha){g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);}g.drawImage(src,0,0,c.width,c.height);
     url=c.toDataURL(type,q);
-    if(type==='image/webp'&&url.indexOf('data:image/webp')!==0){type='image/jpeg';url=c.toDataURL(type,q);}
+    /* Safari cannot write WebP and quietly hands back something else. JPEG has no transparency (cut-outs turn black), so see-through pictures fall back to PNG. */
+    if(type==='image/webp'&&url.indexOf('data:image/webp')!==0){type=alpha?'image/png':'image/jpeg';url=c.toDataURL(type,q);}
     if(url.length<=230000)return url;
-    if(q>.5)q-=.12;else{max=Math.round(max*.8);q=.72;}
+    if(type==='image/png')max=Math.round(Math.min(max,Math.max(w,h))*.82);
+    else if(q>.5)q-=.12;else{max=Math.round(max*.8);q=.72;}
   }
   return url;
 }
@@ -2623,7 +2629,9 @@ function drawTray(){
   var dc=stkData(),per=8,h='<div class="trayh"><b>스티커</b><span class="sub">종이에서 떼어, 붙이고 싶은 곳을 눌러요</span><span class="seg szseg" role="group" aria-label="붙일 크기">'+[['s','작게'],['m','보통'],['l','크게']].map(function(z){return '<button data-a="stksz" data-z="'+z[0]+'" aria-pressed="'+((dc.sz||'m')===z[0])+'">'+z[1]+'</button>';}).join('')+'</span><span class="grow"></span><label class="btn sm sec">'+PLUSS+'파일 넣기<input class="sr" type="file" accept="image/*" multiple data-c="stkadd"></label><label class="btn sm sec dirb">폴더째 넣기<input class="sr" type="file" webkitdirectory multiple data-c="stkadd"></label><button class="btn sm" data-a="stkmode">완료</button></div><div class="sheets">';
   if(!dc.stk.length)h+='<div class="stsheet none"><div class="shgrid">'+new Array(per+1).join('<span class="stkb ghost"></span>')+'</div><p>배경이 투명한 PNG 파일을 넣으면 여기에 스티커 종이가 생겨요.<br>파일이나 폴더를 이 칸에 끌어다 놓아도 돼요.</p></div>';
   for(var i=0;i<dc.stk.length;i+=per){h+='<div class="stsheet"><div class="shgrid">'+dc.stk.slice(i,i+per).map(function(id){return '<span class="stkb" role="button" tabindex="0" data-stk="'+esc(id)+'" aria-label="스티커 떼기"><img alt="" draggable="false"><i class="shine"></i><button class="xbtn" data-a="stkdel" data-img="'+esc(id)+'" aria-label="이 스티커를 종이에서 지우기">×</button></span>';}).join('')+'</div></div>';}
-  t.innerHTML=h+'</div>';
+  h+='</div>';
+  if(dc.stk.length||dc.placed.length)h+='<div class="trayf">'+(dc.placed.length?'<button class="tbtn'+(ui.confirm==='stk:off'?' warn':'')+'" data-a="stkclear" data-k="off">'+(ui.confirm==='stk:off'?'한 번 더 누르면 모두 떼요':'붙인 스티커 모두 떼기 ('+dc.placed.length+')')+'</button>':'')+(dc.stk.length?'<button class="tbtn'+(ui.confirm==='stk:all'?' warn':'')+'" data-a="stkclear" data-k="all">'+(ui.confirm==='stk:all'?'한 번 더 누르면 전부 삭제':'스티커 전부 삭제 ('+dc.stk.length+')')+'</button>':'')+'</div>';
+  t.innerHTML=h;
   [].forEach.call(t.querySelectorAll('.stkb[data-stk]'),function(b){setSrc(b.querySelector('img'),b.dataset.stk,function(u){var m='url("'+u+'")';b.querySelector('.shine').style.webkitMaskImage=m;b.querySelector('.shine').style.maskImage=m;});});
 }
 function regionAt(x,y){
@@ -2649,6 +2657,13 @@ function dropHeld(cancel){
 }
 function overTray(x,y){var t=document.getElementById('tray');if(!t||t.classList.contains('away'))return false;var b=t.getBoundingClientRect();return y>=b.top&&x>=b.left&&x<=b.right;}
 A.stkmode=function(){ui.stkMode=!ui.stkMode;ui.stkSel=null;dropHeld(true);draw();};
+A.stkclear=function(d){
+  var key='stk:'+d.k;if(ui.confirm!==key){ui.confirm=key;drawTray();return;}
+  ui.confirm=null;ui.stkSel=null;var dc=stkData();
+  if(d.k==='off'){dc.placed.forEach(function(p){if(dc.stk.indexOf(p.img)<0)delImg(p.img);});dc.placed=[];toast('붙인 스티커를 모두 뗐어요');}
+  else{var ids={};dc.stk.forEach(function(x){ids[x]=1;});dc.placed.forEach(function(p){ids[p.img]=1;});Object.keys(ids).forEach(delImg);dc.stk=[];dc.placed=[];dc.stkf={};toast('스티커를 전부 삭제했어요');}
+  touch();
+};
 A.stkdel=function(d){var dc=stkData();dc.stk=dc.stk.filter(function(x){return x!==d.img;});if(dc.stkf)Object.keys(dc.stkf).forEach(function(k){if(dc.stkf[k]===d.img)delete dc.stkf[k];});if(!dc.placed.some(function(p){return p.img===d.img;}))delImg(d.img);touch();};
 A.stkop=function(d){var dc=stkData(),p=dc.placed.filter(function(x){return x.id===ui.stkSel;})[0];if(!p)return;
   if(d.op==='del'){dc.placed=dc.placed.filter(function(x){return x!==p;});ui.stkSel=null;if(dc.stk.indexOf(p.img)<0&&!dc.placed.some(function(x){return x.img===p.img;}))delImg(p.img);}
