@@ -2313,17 +2313,17 @@ function newSong(title){return {id:uid('s'),color:nextColor(),title:title,frames
 var A={
   demo:function(){if(hasData())return;var t=today(),d=function(n){return addDays(t,n);},B=function(id,ty,text,x){var o={id:id,t:ty,text:text||''};if(x)for(var k in x)o[k]=x[k];return o;},sg=function(id,title,c,star,memo,fr,a,b,pv,rd,body){return {id:id,title:title,color:c,star:star,memo:memo,frames:fr,start:a,end:b,checks:{pv:pv,render:rd},lyrics:[],body:(body||[]).concat([B(id+'z','p','')])};};
     S.projects=[
-     {id:'dm1',name:'솜사탕클럽',fps:30,pv1:d(4),pv2:d(8),render:d(10),due:d(10),show:d(11),notes:'전 곡 LED 해상도 3840x1080 확인. 사이드 LED는 좌우 반전 필요.',archived:false,songs:[
-      sg('dm1a','구름 한 스푼',0,3,'후렴 톤 다운 요청, 인트로 블랙 유지',5400,d(-1),d(2),true,false,[B('a0','h','1차 피드백'),B('a1','todo','후렴 구간 색 톤 낮추기',{done:false,day:t,slot:'am',ord:0}),B('a2','todo','엔딩 로고 2초 더 길게',{done:true,day:d(-1),slot:'pm',ord:1}),B('a3','todo','브릿지 파티클 양 줄이기',{done:false,day:'',slot:'pm',ord:2}),B('a4','li','인트로 8마디는 블랙 유지'),B('a5','li','브릿지에서 컬러 전환'),B('a6','hr'),B('a7','p','모델링 씬은 지난 공연 에셋을 재사용할 수 있는지 확인하기.')]),
-      sg('dm1b','Marshmallow Day',1,1,'',6300,d(1),d(4),true,true,[B('b1','todo','최종 렌더 파일명 정리',{done:true,day:d(-2),slot:'pm',ord:0})]),
-      sg('dm1c','열일곱의 편지',2,0,'가사 타이밍 확인',5800,'','',false,false,[B('c1','todo','가사 타이밍 싱크 맞추기',{done:false,day:'',slot:'pm',ord:0}),B('c2','todo','하늘 배경 루프 만들기',{done:false,day:'',slot:'pm',ord:1})]),
+     {id:'dm1',name:'DREAMER 앵콜 콘서트',fps:30,pv1:d(4),pv2:d(8),render:d(10),due:d(10),show:d(11),notes:'전 곡 LED 해상도 3840x1080 확인. 사이드 LED는 좌우 반전 필요.',archived:false,songs:[
+      sg('dm1a','라임 버드',0,3,'후렴 톤 다운 요청, 인트로 블랙 유지',5400,d(-1),d(2),true,false,[B('a0','h','1차 피드백'),B('a1','todo','후렴 구간 색 톤 낮추기',{done:false,day:t,slot:'am',ord:0}),B('a2','todo','엔딩 로고 2초 더 길게',{done:true,day:d(-1),slot:'pm',ord:1}),B('a3','todo','브릿지 파티클 양 줄이기',{done:false,day:'',slot:'pm',ord:2}),B('a4','li','인트로 8마디는 블랙 유지'),B('a5','li','브릿지에서 컬러 전환'),B('a6','hr'),B('a7','p','모델링 씬은 지난 공연 에셋을 재사용할 수 있는지 확인하기.')]),
+      sg('dm1b','콜드',1,1,'',6300,d(1),d(4),true,true,[B('b1','todo','최종 렌더 파일명 정리',{done:true,day:d(-2),slot:'pm',ord:0})]),
+      sg('dm1c','위성',2,0,'가사 타이밍 확인',5800,'','',false,false,[B('c1','todo','가사 타이밍 싱크 맞추기',{done:false,day:'',slot:'pm',ord:0}),B('c2','todo','하늘 배경 루프 만들기',{done:false,day:'',slot:'pm',ord:1})]),
       sg('dm1d','오르골',3,2,'오르골 오브젝트 모델링 필요',4900,d(5),d(9),false,false,[B('d1','todo','오르골 레퍼런스 모으기',{done:false,day:t,slot:'pm',ord:1})])]},
-     {id:'dm2',name:'네온파도',fps:60,pv1:d(7),pv2:'',render:d(14),due:'',show:d(15),notes:'60fps 납품. 조명팀과 스트로브 구간 공유하기.',archived:false,songs:[
-      sg('dm2a','Static Rush',4,2,'스트로브 구간 밝기 주의',7200,d(-3),d(0),false,false,[B('e1','todo','후반부 글리치 효과 다듬기',{done:false,day:t,slot:'pm',ord:2})]),
-      sg('dm2b','Paper Rocket',5,0,'',6600,'','',false,false)]},
-     {id:'dm3',name:'별빛정류장',fps:60,pv1:d(-45),pv2:'',render:d(-36),due:'',show:d(-35),notes:'',archived:true,songs:[sg('dm3a','막차가 떠난 뒤에',6,3,'',7000,'','',true,true),sg('dm3b','안녕, 여름',7,1,'',6400,'','',true,true),sg('dm3c','Curtain Call',0,0,'',6900,'','',true,true),sg('dm3d','Sunday Loop',1,0,'',5200,'','',true,true),sg('dm3e','첫눈 예보',2,2,'',5900,'','',true,true)]},
-     {id:'dm4',name:'솜사탕클럽',fps:30,pv1:d(-40),pv2:'',render:d(-33),due:'',show:d(-32),notes:'',archived:true,songs:[sg('dm4a','Cotton Step',3,2,'',5100,'','',true,true),sg('dm4b','Little Kite',4,0,'',4800,'','',true,true),sg('dm4c','Snow Globe',5,3,'',5600,'','',true,true)]},
-     {id:'dm5',name:'네온파도',fps:60,pv1:d(-75),pv2:'',render:d(-68),due:'',show:d(-66),notes:'',archived:true,songs:[sg('dm5a','Overdrive Lane',6,1,'',6100,'','',true,true),sg('dm5b','새벽 세 시의 불꽃',7,0,'',5800,'','',true,true)]}];
+     {id:'dm2',name:'LUMIN 월드투어 서울',fps:60,pv1:d(7),pv2:'',render:d(14),due:'',show:d(15),notes:'60fps 납품. 조명팀과 스트로브 구간 공유하기.',archived:false,songs:[
+      sg('dm2a','BLACKOUT',4,2,'스트로브 구간 밝기 주의',7200,d(-3),d(0),false,false,[B('e1','todo','후반부 글리치 효과 다듬기',{done:false,day:t,slot:'pm',ord:2})]),
+      sg('dm2b','무중력',5,0,'',6600,'','',false,false)]},
+     {id:'dm3',name:'KITE 팬콘',fps:60,pv1:d(-45),pv2:'',render:d(-36),due:'',show:d(-35),notes:'',archived:true,songs:[sg('dm3a','첫 차',6,3,'',7000,'','',true,true),sg('dm3b','잔상',7,1,'',6400,'','',true,true),sg('dm3c','Take Off',0,0,'',6900,'','',true,true),sg('dm3d','핑퐁',1,0,'',5200,'','',true,true),sg('dm3e','미열',2,2,'',5900,'','',true,true)]},
+     {id:'dm4',name:'DREAMER 연말 가요제',fps:30,pv1:d(-40),pv2:'',render:d(-33),due:'',show:d(-32),notes:'',archived:true,songs:[sg('dm4a','라임 버드',3,2,'',5100,'','',true,true),sg('dm4b','0시 0분',4,0,'',4800,'','',true,true),sg('dm4c','Encore',5,3,'',5600,'','',true,true)]},
+     {id:'dm5',name:'LUMIN 쇼케이스',fps:60,pv1:d(-75),pv2:'',render:d(-68),due:'',show:d(-66),notes:'',archived:true,songs:[sg('dm5a','점멸',6,1,'',6100,'','',true,true),sg('dm5b','Skyline',7,0,'',5800,'','',true,true)]}];
     S.todos=[{id:'dt1',text:'견적서 보내기',date:t,slot:'am',done:false,ord:1},{id:'dt2',text:'레퍼런스 폴더 정리',date:t,slot:'pm',done:true,ord:0},{id:'dt3',text:'외장하드 백업',date:d(-1),slot:'pm',done:true,ord:0},{id:'dt4',text:'조명팀 메일 답장',date:d(-2),slot:'am',done:true,ord:0},{id:'dt5',text:'플러그인 업데이트',date:d(-4),slot:'pm',done:true,ord:0},{id:'dt6',text:'회의록 공유',date:d(-5),slot:'am',done:true,ord:0}];
     setPeriods(S.projects[0].songs[0],[{a:d(-1),b:d(2)},{a:d(5),b:d(6)}]);setPeriods(S.projects[0].songs[3],[{a:d(7),b:d(9)}]);
     touch();enter();},
